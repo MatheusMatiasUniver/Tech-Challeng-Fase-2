@@ -12,6 +12,7 @@ function makeRepository(
   deletePost: PostRepositoryInterface['delete'],
 ): PostRepositoryInterface {
   return {
+    countByAuthor: async () => 0,
     create: async () => {
       throw new Error('Não implementado')
     },

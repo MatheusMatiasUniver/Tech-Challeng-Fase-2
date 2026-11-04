@@ -28,7 +28,7 @@ export class Post {
 
   @ManyToOne(() => User, (user) => user.posts, {
     nullable: false,
-    onDelete: 'CASCADE',
+    onDelete: 'RESTRICT',
   })
   @JoinColumn({ name: 'autor_id' })
   author!: User

@@ -12,8 +12,12 @@ function makeRepository(
     create: async () => {
       throw new Error('Não implementado')
     },
+    delete: async () => undefined,
+    deleteWithPosts: async () => undefined,
     findByEmail,
     findById: async () => null,
+    findManyByRole: async () => ({ total: 0, users: [] }),
+    update: async () => null,
   }
 }
 
@@ -24,6 +28,7 @@ describe('SigninUseCase', () => {
       email: 'professor@fiap.com.br',
       id: '7d204c96-cb9a-4fa9-bae6-0d0cfb5d8d46',
       passwordHash,
+      role: 'professor',
     }
     const usersRepository = makeRepository(async (email) =>
       email === user.email ? (user as never) : null,
@@ -34,7 +39,8 @@ describe('SigninUseCase', () => {
     const payload = jwt.decode(result.accessToken)
 
     expect(result.tokenType).toBe('Bearer')
-    expect(payload).toMatchObject({ sub: user.id })
+    expect(payload).toMatchObject({ role: 'professor', sub: user.id })
+    expect(result.user).toBe(user)
   })
 
   it('rejects an unknown email with 401', async () => {

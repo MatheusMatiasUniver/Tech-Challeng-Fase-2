@@ -12,6 +12,7 @@ export interface UpdatePostData {
 }
 
 export interface PostRepositoryInterface {
+  countByAuthor(authorId: string): Promise<number>
   create(data: CreatePostData): Promise<Post>
   delete(id: string): Promise<void>
   findAll(): Promise<Post[]>

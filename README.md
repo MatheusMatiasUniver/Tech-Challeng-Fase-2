@@ -1,6 +1,6 @@
 # Tech Challenge Fase 2 - Blogging API
 
-API REST para uma plataforma de blogging voltada a docentes e alunos. Docentes autenticados criam e gerenciam posts; alunos e demais usuários podem consultar e pesquisar o conteúdo publicado.
+API REST para uma plataforma de blogging voltada a docentes e alunos. Professores autenticados criam e gerenciam posts e cadastram outros professores e alunos; alunos fazem login e apenas consultam o conteúdo, que também é público para leitura.
 
 ## 1. Sobre o Projeto
 
@@ -42,6 +42,7 @@ Convenções utilizadas:
 | `nome` | varchar(150) | Nome do usuário |
 | `email` | varchar(255) | Email único para autenticação |
 | `senha_hash` | varchar(255) | Hash bcrypt da senha |
+| `papel` | varchar(20) | `professor` ou `aluno` (restrição `CHECK`) |
 | `created_at` | timestamptz | Data de criação |
 | `updated_at` | timestamptz | Data da última atualização |
 
@@ -89,7 +90,17 @@ Migrations são a única forma de evoluir o schema. `synchronize` fica desabilit
 
 | Método | Rota | Autenticação | Descrição |
 |---|---|---|---|
-| `POST` | `/auth/login` | Não | Retorna um access token Bearer |
+| `POST` | `/auth/login` | Não | Retorna um access token Bearer e o usuário logado |
+| `GET` | `/auth/me` | Bearer | Retorna o usuário dono do token, com o papel |
+
+O token carrega o id (`sub`) e o papel (`role`) do usuário. Nas rotas restritas a professores, a API também confere no banco se o dono do token ainda existe e continua professor, então excluir ou rebaixar alguém corta o acesso na hora. A resposta do login também traz `user: { id, name, email, role, createdAt, updatedAt }`, para o cliente montar as telas certas sem uma segunda chamada. Tokens emitidos antes da existência de papéis são recusados com `401`; basta logar de novo.
+
+#### Papéis
+
+| Papel | Pode |
+|---|---|
+| `professor` | Ler posts; criar, editar e excluir os próprios posts; gerenciar professores e alunos |
+| `aluno` | Fazer login e ler posts. Qualquer escrita responde `403` |
 
 Corpo do login:
 
@@ -100,13 +111,15 @@ Corpo do login:
 }
 ```
 
-O seed cria três usuários docentes, todos com a senha `123456`:
+O seed cria três professores e dois alunos, todos com a senha `123456`:
 
-| Nome | Email |
-|---|---|
-| Professor | `professor@exemplo.com` |
-| Professor 1 | `professor1@exemplo.com` |
-| Professor 2 | `professor2@exemplo.com` |
+| Nome | Email | Papel |
+|---|---|---|
+| Professor | `professor@exemplo.com` | professor |
+| Professor 1 | `professor1@exemplo.com` | professor |
+| Professor 2 | `professor2@exemplo.com` | professor |
+| Aluno 1 | `aluno1@exemplo.com` | aluno |
+| Aluno 2 | `aluno2@exemplo.com` | aluno |
 
 Os dois últimos existem para demonstrar a regra de autoria: ao logar como um professor e tentar editar (`PUT /posts/:id`) ou remover (`DELETE /posts/:id`) um post criado por outro, a API responde `403`.
 
@@ -117,9 +130,9 @@ Os dois últimos existem para demonstrar a regra de autoria: ao logar como um pr
 | `GET` | `/posts` | Não | Lista posts por data de criação |
 | `GET` | `/posts/:id` | Não | Retorna um post pelo id |
 | `GET` | `/posts/search?q=termo` | Não | Busca em título e conteúdo |
-| `POST` | `/posts` | Bearer | Cria um post para o usuário autenticado |
-| `PUT` | `/posts/:id` | Bearer | Atualiza post do próprio autor |
-| `DELETE` | `/posts/:id` | Bearer | Remove post do próprio autor |
+| `POST` | `/posts` | Bearer (professor) | Cria um post para o usuário autenticado |
+| `PUT` | `/posts/:id` | Bearer (professor) | Atualiza post do próprio autor |
+| `DELETE` | `/posts/:id` | Bearer (professor) | Remove post do próprio autor |
 
 Exemplo de criação:
 
@@ -137,6 +150,38 @@ Content-Type: application/json
 ```
 
 O autor é definido pelo JWT; `authorId` não deve ser enviado no corpo da requisição.
+
+### Professores e alunos
+
+Todas as rotas exigem token de professor. `/teachers` e `/students` têm o mesmo contrato; cada uma só enxerga usuários do seu papel (um id de professor em `/students/:id` responde `404`).
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/teachers?page=1&limit=10` | Lista paginada, ordenada por nome (`limit` até 50) |
+| `GET` | `/teachers/:id` | Retorna um professor |
+| `POST` | `/teachers` | Cadastra um professor (`name`, `email`, `password` com 6+ caracteres) |
+| `PUT` | `/teachers/:id` | Atualiza nome, e-mail e/ou senha (a senha só muda se for enviada) |
+| `DELETE` | `/teachers/:id` | Remove um professor (veja abaixo) |
+| `GET/POST/PUT/DELETE` | `/students...` | Mesmas operações para alunos |
+
+Resposta da listagem:
+
+```json
+{
+  "data": [{ "id": "…", "name": "Aluno 1", "email": "aluno1@exemplo.com", "role": "aluno", "createdAt": "…", "updatedAt": "…" }],
+  "meta": { "page": 1, "limit": 10, "total": 2, "totalPages": 1 }
+}
+```
+
+E-mail já usado responde `409`. O hash da senha nunca aparece nas respostas.
+
+**Exclusão de professor com posts.** A chave estrangeira `posts.autor_id` é `ON DELETE RESTRICT`: o banco recusa excluir um autor que ainda tem posts, então nenhum post é apagado sem confirmação. O fluxo é:
+
+1. `DELETE /teachers/:id` responde `409` com `{ "message": "Professor possui 3 posts publicados", "code": "TEACHER_HAS_POSTS", "postsCount": 3 }`.
+2. O cliente pergunta ao usuário se deseja excluir os posts também.
+3. Confirmado, chama `DELETE /teachers/:id?deletePosts=true`, que remove os posts e o professor numa única transação.
+
+Ninguém pode excluir a própria conta (`409`, `code: CANNOT_DELETE_SELF`), o que evita ficar sem nenhum professor com acesso.
 
 ## 6. Containers
 
@@ -204,7 +249,7 @@ Detalhes da publicação:
    cp .env.example .env
    ```
 
-2. Defina um `JWT_SECRET` aleatório e configure a conexão PostgreSQL local no `.env`. Mantenha `DATABASE_SSL=false` no ambiente local e no Docker; ative (`true`) apenas em provedores gerenciados que exijam SSL, como o Render.
+2. Defina um `JWT_SECRET` aleatório e configure a conexão PostgreSQL local no `.env`. Mantenha `DATABASE_SSL=false` no ambiente local e no Docker; ative (`true`) apenas em provedores gerenciados que exijam SSL, como o Render. `CORS_ORIGINS` é opcional: liste, separadas por vírgula, as origens de navegador que podem chamar a API (por exemplo `http://localhost:8081` para o Expo web). Apps nativos Android/iOS não passam por CORS.
 
 3. Instale dependências e prepare o banco:
 

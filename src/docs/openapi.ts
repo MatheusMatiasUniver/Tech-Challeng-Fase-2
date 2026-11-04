@@ -1,5 +1,123 @@
 import type { OpenAPIV3 } from 'openapi-types'
 
+// /teachers e /students tem o mesmo contrato; so mudam o rotulo e a tag.
+function userPaths(
+  label: string,
+  tag: string,
+  extraDelete: Partial<OpenAPIV3.OperationObject> = {},
+): Record<string, OpenAPIV3.PathItemObject> {
+  const json = (ref: string): Record<string, OpenAPIV3.MediaTypeObject> => ({
+    'application/json': { schema: { $ref: ref } },
+  })
+  const common = {
+    security: [{ bearerAuth: [] }],
+    tags: [tag],
+  }
+  const denied = {
+    '401': { $ref: '#/components/responses/Unauthorized' },
+    '403': { $ref: '#/components/responses/TeacherOnly' },
+  }
+
+  return {
+    collection: {
+      get: {
+        ...common,
+        parameters: [
+          { $ref: '#/components/parameters/Page' },
+          { $ref: '#/components/parameters/Limit' },
+        ],
+        responses: {
+          '200': {
+            content: json('#/components/schemas/PaginatedUsers'),
+            description: `Página de ${label}s ordenada por nome.`,
+          },
+          '400': { $ref: '#/components/responses/InvalidRequest' },
+          ...denied,
+        },
+        summary: `Lista ${label}s com paginação`,
+      },
+      post: {
+        ...common,
+        requestBody: {
+          content: json('#/components/schemas/CreateUserRequest'),
+          required: true,
+        },
+        responses: {
+          '201': {
+            content: json('#/components/schemas/User'),
+            description: `${label} cadastrado.`,
+          },
+          '400': { $ref: '#/components/responses/InvalidRequest' },
+          ...denied,
+          '409': { $ref: '#/components/responses/Conflict' },
+        },
+        summary: `Cadastra um ${label}`,
+      },
+    },
+    item: {
+      get: {
+        ...common,
+        parameters: [{ $ref: '#/components/parameters/UserId' }],
+        responses: {
+          '200': {
+            content: json('#/components/schemas/User'),
+            description: `${label} encontrado.`,
+          },
+          ...denied,
+          '404': { $ref: '#/components/responses/UserNotFound' },
+        },
+        summary: `Retorna um ${label}`,
+      },
+      put: {
+        ...common,
+        parameters: [{ $ref: '#/components/parameters/UserId' }],
+        requestBody: {
+          content: json('#/components/schemas/UpdateUserRequest'),
+          required: true,
+        },
+        responses: {
+          '200': {
+            content: json('#/components/schemas/User'),
+            description: `${label} atualizado.`,
+          },
+          '400': { $ref: '#/components/responses/InvalidRequest' },
+          ...denied,
+          '404': { $ref: '#/components/responses/UserNotFound' },
+          '409': { $ref: '#/components/responses/Conflict' },
+        },
+        summary: `Atualiza um ${label} (senha só muda se for enviada)`,
+      },
+      delete: {
+        ...common,
+        parameters: [{ $ref: '#/components/parameters/UserId' }],
+        responses: {
+          '204': { description: `${label} removido.` },
+          ...denied,
+          '404': { $ref: '#/components/responses/UserNotFound' },
+          '409': { $ref: '#/components/responses/Conflict' },
+        },
+        summary: `Remove um ${label}`,
+        ...extraDelete,
+      },
+    },
+  }
+}
+
+const teacherPaths = userPaths('professor', 'Professores', {
+  description:
+    'Professor com posts responde 409 com `code: TEACHER_HAS_POSTS` e `postsCount`. Para excluir o professor junto com os posts, repita a chamada com `deletePosts=true`. Ninguém pode excluir a própria conta (`code: CANNOT_DELETE_SELF`).',
+  parameters: [
+    { $ref: '#/components/parameters/UserId' },
+    {
+      description: 'Confirma a exclusão dos posts do professor junto com ele.',
+      in: 'query',
+      name: 'deletePosts',
+      schema: { default: false, type: 'boolean' },
+    },
+  ],
+})
+const studentPaths = userPaths('aluno', 'Alunos')
+
 export const openApiDocument: OpenAPIV3.Document = {
   openapi: '3.0.3',
   info: {
@@ -8,7 +126,13 @@ export const openApiDocument: OpenAPIV3.Document = {
     title: 'Tech Challenge Blogging API',
     version: '1.0.0',
   },
-  tags: [{ name: 'Autenticação' }, { name: 'Posts' }, { name: 'Operação' }],
+  tags: [
+    { name: 'Autenticação' },
+    { name: 'Posts' },
+    { name: 'Professores' },
+    { name: 'Alunos' },
+    { name: 'Operação' },
+  ],
   paths: {
     '/health': {
       get: {
@@ -64,10 +188,32 @@ export const openApiDocument: OpenAPIV3.Document = {
           '400': { $ref: '#/components/responses/InvalidRequest' },
           '401': { $ref: '#/components/responses/InvalidCredentials' },
         },
-        summary: 'Autentica um usuário',
+        summary: 'Autentica um professor ou aluno',
         tags: ['Autenticação'],
       },
     },
+    '/auth/me': {
+      get: {
+        responses: {
+          '200': {
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/User' },
+              },
+            },
+            description: 'Perfil do usuário dono do token.',
+          },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+        },
+        security: [{ bearerAuth: [] }],
+        summary: 'Retorna o usuário autenticado e seu papel',
+        tags: ['Autenticação'],
+      },
+    },
+    '/teachers': teacherPaths.collection,
+    '/teachers/{id}': teacherPaths.item,
+    '/students': studentPaths.collection,
+    '/students/{id}': studentPaths.item,
     '/posts': {
       get: {
         responses: {
@@ -103,9 +249,10 @@ export const openApiDocument: OpenAPIV3.Document = {
           },
           '400': { $ref: '#/components/responses/InvalidRequest' },
           '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/TeacherOnly' },
         },
         security: [{ bearerAuth: [] }],
-        summary: 'Cria um post para o usuário autenticado',
+        summary: 'Cria um post (somente professores)',
         tags: ['Posts'],
       },
     },
@@ -176,7 +323,7 @@ export const openApiDocument: OpenAPIV3.Document = {
           '404': { $ref: '#/components/responses/NotFound' },
         },
         security: [{ bearerAuth: [] }],
-        summary: 'Atualiza um post do próprio autor',
+        summary: 'Atualiza um post do próprio autor (somente professores)',
         tags: ['Posts'],
       },
       delete: {
@@ -188,13 +335,29 @@ export const openApiDocument: OpenAPIV3.Document = {
           '404': { $ref: '#/components/responses/NotFound' },
         },
         security: [{ bearerAuth: [] }],
-        summary: 'Remove um post do próprio autor',
+        summary: 'Remove um post do próprio autor (somente professores)',
         tags: ['Posts'],
       },
     },
   },
   components: {
     parameters: {
+      Limit: {
+        in: 'query',
+        name: 'limit',
+        schema: { default: 10, maximum: 50, minimum: 1, type: 'integer' },
+      },
+      Page: {
+        in: 'query',
+        name: 'page',
+        schema: { default: 1, minimum: 1, type: 'integer' },
+      },
+      UserId: {
+        in: 'path',
+        name: 'id',
+        required: true,
+        schema: { format: 'uuid', type: 'string' },
+      },
       PostId: {
         in: 'path',
         name: 'id',
@@ -203,13 +366,39 @@ export const openApiDocument: OpenAPIV3.Document = {
       },
     },
     responses: {
+      Conflict: {
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/Error' },
+          },
+        },
+        description:
+          'E-mail já cadastrado, professor com posts ou exclusão da própria conta.',
+      },
+      TeacherOnly: {
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/Error' },
+          },
+        },
+        description: 'Acesso restrito a professores.',
+      },
+      UserNotFound: {
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/Error' },
+          },
+        },
+        description: 'Usuário não encontrado para este papel.',
+      },
       Forbidden: {
         content: {
           'application/json': {
             schema: { $ref: '#/components/schemas/Error' },
           },
         },
-        description: 'O usuário autenticado não é o autor do post.',
+        description:
+          'Aluno tentando escrever ou professor que não é o autor do post.',
       },
       InvalidCredentials: {
         content: {
@@ -256,7 +445,15 @@ export const openApiDocument: OpenAPIV3.Document = {
       },
       Error: {
         example: { message: 'Dados da requisição inválidos' },
-        properties: { message: { type: 'string' } },
+        properties: {
+          message: { type: 'string' },
+          code: {
+            description: 'Código estável para o cliente tratar o erro.',
+            example: 'TEACHER_HAS_POSTS',
+            type: 'string',
+          },
+          postsCount: { type: 'integer' },
+        },
         required: ['message'],
         type: 'object',
       },
@@ -279,8 +476,9 @@ export const openApiDocument: OpenAPIV3.Document = {
         properties: {
           access_token: { type: 'string' },
           token_type: { example: 'Bearer', type: 'string' },
+          user: { $ref: '#/components/schemas/User' },
         },
-        required: ['access_token', 'token_type'],
+        required: ['access_token', 'token_type', 'user'],
         type: 'object',
       },
       Post: {
@@ -315,6 +513,59 @@ export const openApiDocument: OpenAPIV3.Document = {
       Posts: {
         items: { $ref: '#/components/schemas/Post' },
         type: 'array',
+      },
+      User: {
+        properties: {
+          id: { format: 'uuid', type: 'string' },
+          name: { type: 'string' },
+          email: { format: 'email', type: 'string' },
+          role: { enum: ['professor', 'aluno'], type: 'string' },
+          createdAt: { format: 'date-time', type: 'string' },
+          updatedAt: { format: 'date-time', type: 'string' },
+        },
+        required: ['id', 'name', 'email', 'role', 'createdAt', 'updatedAt'],
+        type: 'object',
+      },
+      PaginatedUsers: {
+        properties: {
+          data: { items: { $ref: '#/components/schemas/User' }, type: 'array' },
+          meta: {
+            properties: {
+              limit: { type: 'integer' },
+              page: { type: 'integer' },
+              total: { type: 'integer' },
+              totalPages: { type: 'integer' },
+            },
+            required: ['page', 'limit', 'total', 'totalPages'],
+            type: 'object',
+          },
+        },
+        required: ['data', 'meta'],
+        type: 'object',
+      },
+      CreateUserRequest: {
+        example: {
+          name: 'Maria Silva',
+          email: 'maria@exemplo.com',
+          password: '123456',
+        },
+        properties: {
+          name: { maxLength: 150, minLength: 1, type: 'string' },
+          email: { format: 'email', type: 'string' },
+          password: { maxLength: 72, minLength: 6, type: 'string' },
+        },
+        required: ['name', 'email', 'password'],
+        type: 'object',
+      },
+      UpdateUserRequest: {
+        example: { name: 'Maria S. Silva' },
+        minProperties: 1,
+        properties: {
+          name: { maxLength: 150, minLength: 1, type: 'string' },
+          email: { format: 'email', type: 'string' },
+          password: { maxLength: 72, minLength: 6, type: 'string' },
+        },
+        type: 'object',
       },
       UpdatePostRequest: {
         example: { title: 'Título atualizado' },

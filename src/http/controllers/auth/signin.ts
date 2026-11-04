@@ -4,6 +4,7 @@ import { ZodError } from 'zod'
 import { AppError } from '../../../errors/app-error'
 import { signInSchema } from '../../../schemas/auth.schema'
 import { makeSigninUseCase } from '../../../use-cases/factory/make-signin-use-case'
+import { serializeUser } from '../users/user-response'
 
 export async function signin(
   request: Request,
@@ -13,7 +14,7 @@ export async function signin(
   try {
     const { email, password } = signInSchema.parse(request.body)
     const signinUseCase = makeSigninUseCase()
-    const { accessToken, tokenType } = await signinUseCase.execute(
+    const { accessToken, tokenType, user } = await signinUseCase.execute(
       email,
       password,
     )
@@ -21,6 +22,7 @@ export async function signin(
     response.status(200).json({
       access_token: accessToken,
       token_type: tokenType,
+      user: serializeUser(user),
     })
   } catch (error) {
     if (error instanceof ZodError) {
