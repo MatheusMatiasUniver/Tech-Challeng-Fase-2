@@ -4,6 +4,15 @@ import request from 'supertest'
 import { app } from '../../src/app'
 import { env } from '../../src/env'
 
+// Os testes de integracao rodam sem banco. O requireRole confere o dono do
+// token no banco, entao o repositorio de usuarios e simulado: o professor do
+// token existe e continua professor.
+jest.mock('../../src/repositories/typeorm/typeorm-user-repository', () => ({
+  TypeOrmUserRepository: jest.fn().mockImplementation(() => ({
+    findById: async (id: string) => ({ id, role: 'professor' }),
+  })),
+}))
+
 const teacherToken = jwt.sign(
   { role: 'professor', sub: '7d204c96-cb9a-4fa9-bae6-0d0cfb5d8d46' },
   env.JWT_SECRET,

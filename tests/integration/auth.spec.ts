@@ -69,10 +69,18 @@ describe('authentication HTTP flow', () => {
   it('requireRole returns 403 for a student on a teacher-only route', async () => {
     const protectedApp = express()
 
+    const users = new Map([
+      ['teacher-id', { id: 'teacher-id', role: 'professor' }],
+      ['demoted-id', { id: 'demoted-id', role: 'aluno' }],
+    ])
+    const fakeRepository = (() => ({
+      findById: async (id: string) => users.get(id) ?? null,
+    })) as never
+
     protectedApp.get(
       '/teachers-only',
       jwtValidate,
-      requireRole('professor'),
+      requireRole('professor', fakeRepository),
       (_req, res) => {
         res.status(200).send()
       },
@@ -98,6 +106,26 @@ describe('authentication HTTP flow', () => {
     expect(forbidden.status).toBe(403)
     expect(forbidden.body).toEqual({ message: 'Acesso restrito a professores' })
     expect(allowed.status).toBe(200)
+
+    // Token de professor ainda valido, mas o usuario foi excluido ou
+    // rebaixado para aluno: o acesso cai na hora.
+    const deletedToken = jwt.sign(
+      { role: 'professor', sub: 'deleted-id' },
+      env.JWT_SECRET,
+    )
+    const demotedToken = jwt.sign(
+      { role: 'professor', sub: 'demoted-id' },
+      env.JWT_SECRET,
+    )
+    const deleted = await request(protectedApp)
+      .get('/teachers-only')
+      .set('Authorization', `Bearer ${deletedToken}`)
+    const demoted = await request(protectedApp)
+      .get('/teachers-only')
+      .set('Authorization', `Bearer ${demotedToken}`)
+
+    expect(deleted.status).toBe(401)
+    expect(demoted.status).toBe(403)
   })
 
   it('rejects GET /auth/me without a token', async () => {
