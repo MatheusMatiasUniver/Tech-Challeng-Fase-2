@@ -1,8 +1,10 @@
 import 'reflect-metadata'
+import cors from 'cors'
 import express from 'express'
 import swaggerUi from 'swagger-ui-express'
 
 import { openApiDocument } from './docs/openapi'
+import { env } from './env'
 import { authRoutes } from './http/controllers/auth/routes'
 import { postsRoutes } from './http/controllers/posts/routes'
 import { studentsRoutes, teachersRoutes } from './http/controllers/users/routes'
@@ -11,6 +13,14 @@ import { metricsMiddleware } from './http/middlewares/metrics'
 import { metricsRegistry } from './observability/metrics'
 
 export const app = express()
+
+if (env.CORS_ORIGINS.length > 0) {
+  app.use(
+    cors({
+      origin: env.CORS_ORIGINS.includes('*') ? '*' : env.CORS_ORIGINS,
+    }),
+  )
+}
 
 app.use(express.json())
 app.use(metricsMiddleware)
