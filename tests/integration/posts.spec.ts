@@ -30,7 +30,10 @@ describe('posts HTTP flow', () => {
   })
 
   it('validates the post body before repository access', async () => {
-    const token = jwt.sign({ sub: 'author-id' }, env.JWT_SECRET)
+    const token = jwt.sign(
+      { role: 'professor', sub: 'author-id' },
+      env.JWT_SECRET,
+    )
     const response = await request(app)
       .post('/posts')
       .set('Authorization', `Bearer ${token}`)
