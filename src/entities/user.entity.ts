@@ -9,6 +9,10 @@ import {
 
 import { Post } from './post.entity'
 
+export const USER_ROLES = ['professor', 'aluno'] as const
+
+export type UserRole = (typeof USER_ROLES)[number]
+
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
@@ -22,6 +26,9 @@ export class User {
 
   @Column({ name: 'senha_hash', type: 'varchar', length: 255 })
   passwordHash!: string
+
+  @Column({ name: 'papel', type: 'varchar', length: 20 })
+  role!: UserRole
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date
