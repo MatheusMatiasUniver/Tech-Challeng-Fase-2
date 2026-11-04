@@ -12,8 +12,11 @@ function makeRepository(
     create: async () => {
       throw new Error('Não implementado')
     },
+    delete: async () => undefined,
     findByEmail,
     findById: async () => null,
+    findManyByRole: async () => ({ total: 0, users: [] }),
+    update: async () => null,
   }
 }
 

@@ -12,6 +12,7 @@ function makeRepository(
   update: PostRepositoryInterface['update'],
 ): PostRepositoryInterface {
   return {
+    countByAuthor: async () => 0,
     create: async () => {
       throw new Error('Não implementado')
     },

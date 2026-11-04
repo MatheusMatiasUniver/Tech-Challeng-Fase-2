@@ -9,7 +9,9 @@ export const errorHandler: ErrorRequestHandler = (
   _next,
 ) => {
   if (error instanceof AppError) {
-    response.status(error.statusCode).json({ message: error.message })
+    response
+      .status(error.statusCode)
+      .json({ message: error.message, ...error.details })
     return
   }
 

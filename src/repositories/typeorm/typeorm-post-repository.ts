@@ -9,6 +9,10 @@ import {
 export class TypeOrmPostRepository implements PostRepositoryInterface {
   private readonly repository = AppDataSource.getRepository(Post)
 
+  async countByAuthor(authorId: string): Promise<number> {
+    return this.repository.countBy({ authorId })
+  }
+
   async create(data: CreatePostData): Promise<Post> {
     const post = this.repository.create(data)
 
