@@ -1,10 +1,11 @@
-import { User } from '../entities/user.entity'
+import { User, type UserRole } from '../entities/user.entity'
 
 export interface CreateUserData {
   email: string
   id?: string
   name: string
   passwordHash: string
+  role: UserRole
 }
 
 export interface UserRepositoryInterface {
