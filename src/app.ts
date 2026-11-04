@@ -5,6 +5,7 @@ import swaggerUi from 'swagger-ui-express'
 import { openApiDocument } from './docs/openapi'
 import { authRoutes } from './http/controllers/auth/routes'
 import { postsRoutes } from './http/controllers/posts/routes'
+import { studentsRoutes, teachersRoutes } from './http/controllers/users/routes'
 import { errorHandler } from './http/middlewares/error-handler'
 import { metricsMiddleware } from './http/middlewares/metrics'
 import { metricsRegistry } from './observability/metrics'
@@ -38,5 +39,7 @@ app.use(
 
 app.use('/auth', authRoutes)
 app.use('/posts', postsRoutes)
+app.use('/teachers', teachersRoutes)
+app.use('/students', studentsRoutes)
 
 app.use(errorHandler)
