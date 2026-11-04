@@ -93,7 +93,7 @@ Migrations são a única forma de evoluir o schema. `synchronize` fica desabilit
 | `POST` | `/auth/login` | Não | Retorna um access token Bearer e o usuário logado |
 | `GET` | `/auth/me` | Bearer | Retorna o usuário dono do token, com o papel |
 
-O token carrega o id (`sub`) e o papel (`role`) do usuário. A resposta do login também traz `user: { id, name, email, role, createdAt, updatedAt }`, para o cliente montar as telas certas sem uma segunda chamada. Tokens emitidos antes da existência de papéis são recusados com `401`; basta logar de novo.
+O token carrega o id (`sub`) e o papel (`role`) do usuário. Nas rotas restritas a professores, a API também confere no banco se o dono do token ainda existe e continua professor, então excluir ou rebaixar alguém corta o acesso na hora. A resposta do login também traz `user: { id, name, email, role, createdAt, updatedAt }`, para o cliente montar as telas certas sem uma segunda chamada. Tokens emitidos antes da existência de papéis são recusados com `401`; basta logar de novo.
 
 #### Papéis
 
@@ -175,11 +175,11 @@ Resposta da listagem:
 
 E-mail já usado responde `409`. O hash da senha nunca aparece nas respostas.
 
-**Exclusão de professor com posts.** Excluir um professor apagaria os posts dele (a chave estrangeira é `ON DELETE CASCADE`). Por isso a API exige confirmação explícita:
+**Exclusão de professor com posts.** A chave estrangeira `posts.autor_id` é `ON DELETE RESTRICT`: o banco recusa excluir um autor que ainda tem posts, então nenhum post é apagado sem confirmação. O fluxo é:
 
 1. `DELETE /teachers/:id` responde `409` com `{ "message": "Professor possui 3 posts publicados", "code": "TEACHER_HAS_POSTS", "postsCount": 3 }`.
 2. O cliente pergunta ao usuário se deseja excluir os posts também.
-3. Confirmado, chama `DELETE /teachers/:id?deletePosts=true`, que remove o professor e os posts no mesmo comando.
+3. Confirmado, chama `DELETE /teachers/:id?deletePosts=true`, que remove os posts e o professor numa única transação.
 
 Ninguém pode excluir a própria conta (`409`, `code: CANNOT_DELETE_SELF`), o que evita ficar sem nenhum professor com acesso.
 
