@@ -1,4 +1,7 @@
+import { QueryFailedError } from 'typeorm'
+
 import { AppDataSource } from '../../database/data-source'
+import { Post } from '../../entities/post.entity'
 import { User, type UserRole } from '../../entities/user.entity'
 import {
   type CreateUserData,
@@ -7,6 +10,17 @@ import {
   type UpdateUserData,
   type UserRepositoryInterface,
 } from '../user-repository.interface'
+import { UserHasPostsError } from '../errors/user-has-posts-error'
+
+// Codigo do PostgreSQL para violacao de chave estrangeira.
+const FOREIGN_KEY_VIOLATION = '23503'
+
+function isForeignKeyViolation(error: unknown): boolean {
+  return (
+    error instanceof QueryFailedError &&
+    (error.driverError as { code?: string }).code === FOREIGN_KEY_VIOLATION
+  )
+}
 
 export class TypeOrmUserRepository implements UserRepositoryInterface {
   private readonly repository = AppDataSource.getRepository(User)
@@ -17,10 +31,33 @@ export class TypeOrmUserRepository implements UserRepositoryInterface {
     return this.repository.save(user)
   }
 
-  // Os posts do usuario sao removidos pelo proprio banco (FK com ON DELETE
-  // CASCADE) dentro deste mesmo DELETE, entao a operacao e atomica.
   async delete(id: string): Promise<void> {
-    await this.repository.delete(id)
+    try {
+      await this.repository.delete(id)
+    } catch (error) {
+      if (isForeignKeyViolation(error)) {
+        throw new UserHasPostsError()
+      }
+
+      throw error
+    }
+  }
+
+  // Se um post novo for publicado no meio da transacao, a FK RESTRICT faz o
+  // DELETE do usuario falhar e tudo e desfeito: nada e apagado pela metade.
+  async deleteWithPosts(id: string): Promise<void> {
+    try {
+      await AppDataSource.transaction(async (manager) => {
+        await manager.delete(Post, { authorId: id })
+        await manager.delete(User, { id })
+      })
+    } catch (error) {
+      if (isForeignKeyViolation(error)) {
+        throw new UserHasPostsError()
+      }
+
+      throw error
+    }
   }
 
   async findByEmail(email: string): Promise<User | null> {

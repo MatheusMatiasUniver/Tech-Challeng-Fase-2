@@ -187,6 +187,31 @@ describe('DeleteUserUseCase', () => {
     expect(await repository.findById('teacher-bruno')).toBeNull()
   })
 
+  it('returns 409 when a post appears between the check and the delete', async () => {
+    const repository = new InMemoryUserRepository()
+    await seedUsers(repository)
+    // A contagem ve 0 posts, mas o "banco" recusa o DELETE (post novo).
+    repository.authorsWithPosts.add('teacher-bruno')
+    let countCalls = 0
+    const postsRepository = {
+      ...makePostsRepository(0),
+      countByAuthor: async () => (countCalls++ === 0 ? 0 : 1),
+    }
+
+    await expect(
+      new DeleteUserUseCase(repository, postsRepository, 'professor').execute(
+        'teacher-bruno',
+        'teacher-ana',
+        { deletePosts: false },
+      ),
+    ).rejects.toMatchObject({
+      details: { code: 'TEACHER_HAS_POSTS', postsCount: 1 },
+      message: 'Professor possui 1 post publicado',
+      statusCode: 409,
+    })
+    expect(await repository.findById('teacher-bruno')).not.toBeNull()
+  })
+
   it('deletes a student directly', async () => {
     const repository = new InMemoryUserRepository()
     await seedUsers(repository)

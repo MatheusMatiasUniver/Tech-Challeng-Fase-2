@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import { type User, type UserRole } from '../../src/entities/user.entity'
+import { UserHasPostsError } from '../../src/repositories/errors/user-has-posts-error'
 import {
   type CreateUserData,
   type PaginatedUsers,
@@ -27,7 +28,19 @@ export class InMemoryUserRepository implements UserRepositoryInterface {
     return user
   }
 
+  // Simula a FK RESTRICT: ids aqui dentro tem posts no "banco".
+  public authorsWithPosts = new Set<string>()
+
   async delete(id: string): Promise<void> {
+    if (this.authorsWithPosts.has(id)) {
+      throw new UserHasPostsError()
+    }
+
+    this.users = this.users.filter((user) => user.id !== id)
+  }
+
+  async deleteWithPosts(id: string): Promise<void> {
+    this.authorsWithPosts.delete(id)
     this.users = this.users.filter((user) => user.id !== id)
   }
 

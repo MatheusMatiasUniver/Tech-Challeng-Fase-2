@@ -26,7 +26,10 @@ export interface PaginatedUsers {
 
 export interface UserRepositoryInterface {
   create(data: CreateUserData): Promise<User>
+  // Lanca UserHasPostsError se o usuario ainda tiver posts.
   delete(id: string): Promise<void>
+  // Remove os posts do usuario e o usuario numa unica transacao.
+  deleteWithPosts(id: string): Promise<void>
   findByEmail(email: string): Promise<User | null>
   findById(id: string): Promise<User | null>
   findManyByRole(
