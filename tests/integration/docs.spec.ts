@@ -18,6 +18,8 @@ describe('OpenAPI documentation', () => {
         '/teachers/{id}': expect.any(Object),
         '/students': expect.any(Object),
         '/students/{id}': expect.any(Object),
+        '/posts/{postId}/comments': expect.any(Object),
+        '/posts/{postId}/comments/{commentId}': expect.any(Object),
       }),
     )
     expect(response.body.components.securitySchemes.bearerAuth).toEqual(

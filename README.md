@@ -57,6 +57,19 @@ Convenções utilizadas:
 | `created_at` | timestamptz | Data de criação |
 | `updated_at` | timestamptz | Data da última atualização |
 
+### `comments`
+
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| `id` | UUID | Identificador do comentário, com default `gen_random_uuid()` |
+| `conteudo` | text | Texto do comentário (até 1000 caracteres, validado na API) |
+| `post_id` | UUID | Chave estrangeira para `posts.id` (`ON DELETE CASCADE`) |
+| `autor_id` | UUID | Chave estrangeira para `users.id` (`ON DELETE CASCADE`) |
+| `created_at` | timestamptz | Data de criação |
+| `updated_at` | timestamptz | Data da última atualização |
+
+Ao contrário de `posts.autor_id` (`RESTRICT`), as duas chaves de `comments` usam `CASCADE`: um comentário não faz sentido sem o post ou sem a pessoa. Excluir um post apaga os comentários dele, e excluir um aluno apaga os comentários do aluno. Há índices em `(post_id, created_at)`, usado na listagem, e em `autor_id`, usado pelo `CASCADE` ao excluir um usuário.
+
 As chaves primárias de `users` e `posts` são UUID (`gen_random_uuid()`), e não inteiros sequenciais. Essa escolha é uma decisão de segurança detalhada na seção 12.
 
 Migrations são a única forma de evoluir o schema. `synchronize` fica desabilitado para evitar alterações automáticas no banco.
@@ -150,6 +163,21 @@ Content-Type: application/json
 ```
 
 O autor é definido pelo JWT; `authorId` não deve ser enviado no corpo da requisição.
+
+### Comentários
+
+Item opcional da Fase 4. Ler é público, como ler posts; comentar exige login de qualquer papel (professor ou aluno).
+
+| Método | Rota | Autenticação | Descrição |
+|---|---|---|---|
+| `GET` | `/posts/:postId/comments` | Não | Comentários do post, do mais antigo para o mais novo |
+| `POST` | `/posts/:postId/comments` | Bearer (qualquer papel) | Comenta como o usuário do token. Corpo: `{ "content": "..." }` |
+| `DELETE` | `/posts/:postId/comments/:commentId` | Bearer (qualquer papel) | Remove o comentário |
+
+- Post inexistente responde `404` também na listagem, para o cliente distinguir "sem comentários" de "post apagado".
+- Excluir é permitido a quem escreveu o comentário e ao professor autor do post (moderação do próprio conteúdo). Os demais recebem `403`.
+- O autor do comentário volta com `id`, `name` e `role`, sem e-mail: a lista é pública e inclui alunos.
+- Como no `requireRole`, o middleware `requireUser` confere no banco se o dono do token ainda existe. Um aluno excluído deixa de comentar na hora, sem esperar o token expirar.
 
 ### Professores e alunos
 
