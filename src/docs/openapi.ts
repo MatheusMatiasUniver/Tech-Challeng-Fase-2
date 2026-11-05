@@ -129,6 +129,7 @@ export const openApiDocument: OpenAPIV3.Document = {
   tags: [
     { name: 'Autenticação' },
     { name: 'Posts' },
+    { name: 'Comentários' },
     { name: 'Professores' },
     { name: 'Alunos' },
     { name: 'Operação' },
@@ -339,6 +340,84 @@ export const openApiDocument: OpenAPIV3.Document = {
         tags: ['Posts'],
       },
     },
+    '/posts/{postId}/comments': {
+      get: {
+        parameters: [{ $ref: '#/components/parameters/CommentPostId' }],
+        responses: {
+          '200': {
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Comments' },
+              },
+            },
+            description:
+              'Comentários do post, do mais antigo para o mais novo.',
+          },
+          '400': { $ref: '#/components/responses/InvalidRequest' },
+          '404': { $ref: '#/components/responses/NotFound' },
+        },
+        summary: 'Lista os comentários de um post (público)',
+        tags: ['Comentários'],
+      },
+      post: {
+        parameters: [{ $ref: '#/components/parameters/CommentPostId' }],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/CreateCommentRequest' },
+            },
+          },
+          required: true,
+        },
+        responses: {
+          '201': {
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Comment' },
+              },
+            },
+            description: 'Comentário criado.',
+          },
+          '400': { $ref: '#/components/responses/InvalidRequest' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '404': { $ref: '#/components/responses/NotFound' },
+        },
+        security: [{ bearerAuth: [] }],
+        summary: 'Comenta em um post (professor ou aluno logado)',
+        tags: ['Comentários'],
+      },
+    },
+    '/posts/{postId}/comments/{commentId}': {
+      delete: {
+        parameters: [
+          { $ref: '#/components/parameters/CommentPostId' },
+          {
+            in: 'path',
+            name: 'commentId',
+            required: true,
+            schema: { format: 'uuid', type: 'string' },
+          },
+        ],
+        responses: {
+          '204': { description: 'Comentário removido.' },
+          '400': { $ref: '#/components/responses/InvalidRequest' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': {
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' },
+              },
+            },
+            description: 'Post ou comentário não encontrado.',
+          },
+        },
+        security: [{ bearerAuth: [] }],
+        summary:
+          'Remove um comentário (autor do comentário ou professor autor do post)',
+        tags: ['Comentários'],
+      },
+    },
   },
   components: {
     parameters: {
@@ -355,6 +434,12 @@ export const openApiDocument: OpenAPIV3.Document = {
       UserId: {
         in: 'path',
         name: 'id',
+        required: true,
+        schema: { format: 'uuid', type: 'string' },
+      },
+      CommentPostId: {
+        in: 'path',
+        name: 'postId',
         required: true,
         schema: { format: 'uuid', type: 'string' },
       },
@@ -434,6 +519,48 @@ export const openApiDocument: OpenAPIV3.Document = {
       },
     },
     schemas: {
+      Comment: {
+        properties: {
+          id: { format: 'uuid', type: 'string' },
+          content: { type: 'string' },
+          postId: { format: 'uuid', type: 'string' },
+          authorId: { format: 'uuid', type: 'string' },
+          createdAt: { format: 'date-time', type: 'string' },
+          updatedAt: { format: 'date-time', type: 'string' },
+          author: { $ref: '#/components/schemas/CommentAuthor' },
+        },
+        required: [
+          'id',
+          'content',
+          'postId',
+          'authorId',
+          'createdAt',
+          'updatedAt',
+        ],
+        type: 'object',
+      },
+      // Sem e-mail: a lista e publica e os autores podem ser alunos.
+      CommentAuthor: {
+        properties: {
+          id: { format: 'uuid', type: 'string' },
+          name: { type: 'string' },
+          role: { enum: ['professor', 'aluno'], type: 'string' },
+        },
+        required: ['id', 'name', 'role'],
+        type: 'object',
+      },
+      Comments: {
+        items: { $ref: '#/components/schemas/Comment' },
+        type: 'array',
+      },
+      CreateCommentRequest: {
+        example: { content: 'Ótima explicação, obrigado!' },
+        properties: {
+          content: { maxLength: 1000, minLength: 1, type: 'string' },
+        },
+        required: ['content'],
+        type: 'object',
+      },
       CreatePostRequest: {
         example: { title: 'Meu primeiro post', content: 'Conteúdo do post.' },
         properties: {
