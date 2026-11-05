@@ -6,6 +6,8 @@ import { CreatePosts1710000001000 } from './migrations/1710000001000-create-post
 import { AddUuidDefaults1710000002000 } from './migrations/1710000002000-add-uuid-defaults'
 import { AddUserRole1710000003000 } from './migrations/1710000003000-add-user-role'
 import { RestrictPostAuthorDelete1710000004000 } from './migrations/1710000004000-restrict-post-author-delete'
+import { CreateComments1710000005000 } from './migrations/1710000005000-create-comments'
+import { Comment } from '../entities/comment.entity'
 import { Post } from '../entities/post.entity'
 import { User } from '../entities/user.entity'
 import { env } from '../env'
@@ -18,13 +20,14 @@ export const AppDataSource = new DataSource({
   password: env.DATABASE_PASSWORD,
   database: env.DATABASE_NAME,
   ssl: env.DATABASE_SSL ? { rejectUnauthorized: false } : false,
-  entities: [User, Post],
+  entities: [User, Post, Comment],
   migrations: [
     CreateUsers1710000000000,
     CreatePosts1710000001000,
     AddUuidDefaults1710000002000,
     AddUserRole1710000003000,
     RestrictPostAuthorDelete1710000004000,
+    CreateComments1710000005000,
   ],
   migrationsRun: false,
   synchronize: false,
