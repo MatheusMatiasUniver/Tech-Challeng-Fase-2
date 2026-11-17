@@ -23,7 +23,7 @@ Responsabilidades principais:
 - `src/repositories/typeorm/`: implementa os contratos com TypeORM.
 - `src/use-cases/factory/`: monta use-cases com suas dependências concretas.
 - `src/entities/`: mapeia entidades TypeORM.
-- `src/database/`: concentra DataSource, migrations e seed.
+- `src/database/`: concentra DataSource, migrations, seed e o cenário da apresentação (`seeds/demo-data.ts` e `seeds/reset-demo.ts`).
 
 ## 3. Schemas e Banco de Dados
 
@@ -323,6 +323,44 @@ Para remover também o volume do banco Docker:
 ```bash
 docker compose down -v
 ```
+
+### Preparar ou resetar o ambiente da apresentação
+
+O seed normal só cria as cinco contas acima, sem posts. Para gravar a demonstração da Fase 4 existe um reset que deixa o banco exatamente no cenário do roteiro, e pode ser rodado de novo a qualquer momento (por exemplo, depois de um ensaio que apagou posts e pessoas):
+
+| O que é criado | Detalhe |
+|---|---|
+| 3 professores | `professor@`, `professor1@` e `professor2@exemplo.com` |
+| 12 alunos | `aluno1@` até `aluno12@exemplo.com`; com 10 por página, a lista de alunos tem página 2 |
+| 3 posts do Professor 1 | "Introdução ao React Native", "Hooks na prática", "Como funciona o JWT" |
+| 2 posts do Professor 2 | "Revisão de SQL", "Git para iniciantes" (usados na exclusão de professor com posts) |
+| 1 comentário | do Aluno 2 em "Hooks na prática" |
+
+Todas as contas usam a senha `123456`. O cenário está em `src/database/seeds/demo-data.ts`.
+
+O reset aplica as migrations pendentes, apaga **todos** os usuários, posts e comentários do banco configurado e grava o cenário, tudo numa transação: se algo falhar, nada muda. Por apagar dados, ele mostra o banco alvo e pede que você digite `sim`; use `--yes` para pular a pergunta.
+
+**Docker local (um comando):**
+
+```bash
+./scripts/reset-demo.sh
+```
+
+O script gera a imagem da API, sobe o PostgreSQL, roda o reset num container avulso e sobe a API em `http://localhost:3001`.
+
+**Qualquer banco pelas variáveis `DATABASE_*` (Postgres local ou o do Render):**
+
+```bash
+npm run demo:reset
+```
+
+Para resetar o banco do Render, crie um arquivo `.env.render` (ignorado pelo Git) com os dados de **External Database URL** do painel do Render (`DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`), `DATABASE_SSL=true` e qualquer `JWT_SECRET` de 32 caracteres, e rode:
+
+```bash
+DOTENV_CONFIG_PATH=.env.render npm run demo:reset
+```
+
+Os IDs mudam a cada reset, então um app que estava logado volta a pedir login. Para a gravação, isso é o esperado: a demo começa como visitante.
 
 ## 10. Observabilidade
 
