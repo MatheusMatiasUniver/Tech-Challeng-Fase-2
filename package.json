@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "tsup src --out-dir build",
+    "demo:reset": "tsx src/database/seeds/reset-demo.ts",
     "dev": "tsx watch src/server.ts",
     "lint": "eslint . --ext .ts",
     "migration:generate": "tsx ./node_modules/typeorm/cli.js migration:generate src/database/migrations/migration -d src/database/data-source.ts",
